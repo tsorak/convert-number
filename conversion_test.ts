@@ -165,4 +165,21 @@ Deno.test("Object conversions", async (t) => {
       assertEquals(maybeNumber, {});
     }
   );
+
+  await t.step("Convert object with nested object returns NaN", () => {
+    const obj = { a: "123", b: { c: "456" }, d: "789" };
+    const maybeNumber = toNumber(obj, { allowNaN: true });
+
+    assertEquals(maybeNumber, { a: 123, b: NaN, d: 789 });
+  });
+
+  await t.step("Convert object with nested object with convertNested", () => {
+    const obj = { a: "123", b: { c: "456", d: true }, e: "789" };
+    const maybeNumber = toNumber(obj, {
+      convertNested: true,
+      allowNaN: true,
+    });
+
+    assertEquals(maybeNumber, { a: 123, b: { c: 456, d: NaN }, e: 789 });
+  });
 });

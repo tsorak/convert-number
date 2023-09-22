@@ -70,11 +70,11 @@ export function toNumber<K extends ObjKey>(
     convertBooleans?: boolean;
     convertNested?: boolean;
   }
-): Record<K, number> | false;
+): Record<K, number | unknown> | false;
 export function toNumber<K extends ObjKey>(
   value: unknown,
   o?: ConvertOptions
-): number | Array<number | unknown> | Record<K, number> | false {
+): number | Array<number | unknown> | Record<K, number | unknown> | false {
   const vtype = getValueType(value);
 
   switch (vtype) {
@@ -117,10 +117,7 @@ export function toNumber<K extends ObjKey>(
       if (isEmpty && o?.allowEmpty) return {} as Record<K, number>;
       if (isEmpty) return false;
 
-      const converted = Object.entries(obj).map(([key, value]) => [
-        key,
-        Number(value),
-      ]);
+      const converted = convertObject(obj, o);
 
       const shouldFailOnNaN = o?.allowNaN !== true;
       if (shouldFailOnNaN) {
@@ -128,6 +125,7 @@ export function toNumber<K extends ObjKey>(
         if (hasNaNPresent === true) return false;
       }
 
+      // @ts-ignore:
       return Object.fromEntries(converted);
     }
     case "notimplemented": {
@@ -142,7 +140,7 @@ export function toNumber<K extends ObjKey>(
 function getValueType(value: unknown) {
   if (typeof value !== "object") return typeof value;
 
-  if (Object.prototype.toString.call(value) === "[object Object]") {
+  if (isObject(value)) {
     return "object";
   }
   if (Array.isArray(value)) return "array";
@@ -150,19 +148,48 @@ function getValueType(value: unknown) {
 }
 
 //@ts-ignore: if o.convertNested is true the return type will be as many nested arrays as the input
-function convertArray(arr: unknown[], o?: ConvertOptions) {
-  if (o?.convertBooleans) {
-    return arr.map((item) => {
-      if (Array.isArray(item) && o?.convertNested) return convertArray(item, o);
-      if (typeof item === "boolean") return convertBool(item);
-      return Number(item);
-    });
-  } else {
-    return arr.map((item) => {
-      if (Array.isArray(item) && o?.convertNested) return convertArray(item, o);
-      return Number(item);
-    });
-  }
+function convertArray(
+  arr: unknown[],
+  o?: ConvertOptions
+  // ): number[] | NestedNumberArray<number[]> {
+) {
+  const shouldConvertNested = o?.convertNested === true;
+  return arr.map((item) => {
+    if (typeof item === "boolean") {
+      if (o?.convertBooleans) return convertBool(item);
+      return NaN;
+    }
+    if (shouldConvertNested) {
+      if (Array.isArray(item)) return convertArray(item, o);
+      if (isObject(item)) return convertObject(item, o);
+    }
+    return Number(item);
+  });
+}
+
+//@ts-ignore: if o.convertNested is true the return type will be as many nested arrays as the input
+function convertObject<K extends ObjKey, V>(
+  obj: Record<K, V>,
+  o?: ConvertOptions
+) {
+  const shouldConvertNested = o?.convertNested === true;
+  return Object.entries(obj).map(([key, value]) => {
+    if (typeof value === "boolean") {
+      if (o?.convertBooleans) return [key, convertBool(value)];
+      return [key, NaN];
+    }
+    if (shouldConvertNested) {
+      if (Array.isArray(value)) return [key, convertArray(value, o)];
+      if (isObject(value)) {
+        return [key, Object.fromEntries(convertObject(value, o))];
+      }
+    }
+    return [key, Number(value)];
+  });
+}
+
+function isObject(obj: unknown): obj is Record<ObjKey, unknown> {
+  return Object.prototype.toString.call(obj) === "[object Object]";
 }
 
 function isObjectEmpty<K extends ObjKey, V>(obj: Record<K, V>): boolean {
@@ -170,7 +197,7 @@ function isObjectEmpty<K extends ObjKey, V>(obj: Record<K, V>): boolean {
 }
 
 function isNaNPresent(arr: unknown[]) {
-  return arr.flat().some((item) => Number.isNaN(item) === true);
+  return arr.flat(Infinity).some((item) => Number.isNaN(item) === true);
 }
 
 function convertBool(b: boolean): number {
