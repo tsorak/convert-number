@@ -1,9 +1,10 @@
 {
   "tasks": {
-    "dev": "deno run -A --watch main.ts",
-    "start": "deno run -A main.ts"
+    "test": "deno test conversion_test.ts",
+    "dev": "deno test --watch conversion_test.ts"
   },
   "imports": {
-    "@/": "./src/"
+    "@/": "./src/",
+    "std_assert/": "https://deno.land/std@0.202.0/assert/"
   }
 }
