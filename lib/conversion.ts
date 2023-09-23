@@ -54,7 +54,7 @@ export function toNumber(
     // convertNested?: boolean;
   }
 ): number[] | false;
-export function toNumber(
+export function toNumber<T>(
   value: NestedNumberArray<unknown>,
   o?: {
     allowNaN?: boolean;
@@ -62,7 +62,7 @@ export function toNumber(
     convertBooleans?: boolean;
     convertNested?: true;
   }
-): NestedNumberArray<number[]> | false;
+): NestedNumberArray<number[] | T> | false;
 export function toNumber<K extends ObjKey>(
   value: Record<K, unknown>,
   o?: {
@@ -121,7 +121,7 @@ export function toNumber<K extends ObjKey>(
       }
 
       const converted = convertObject(obj, o);
-      const convertedObj = () => Object.fromEntries(converted);
+      const convertedObj = () => toObject(converted);
 
       // @ts-ignore:
       if (shouldAllowNaN) return convertedObj();
@@ -163,7 +163,7 @@ function convertArray(
     }
     if (shouldConvertNested) {
       if (Array.isArray(item)) return convertArray(item, o);
-      if (isObject(item)) return convertObject(item, o);
+      if (isObject(item)) return toObject(convertObject(item, o));
     }
     return Number(item);
   });
@@ -183,11 +183,15 @@ function convertObject<K extends ObjKey, V>(
     if (shouldConvertNested) {
       if (Array.isArray(value)) return [key, convertArray(value, o)];
       if (isObject(value)) {
-        return [key, Object.fromEntries(convertObject(value, o))];
+        return [key, toObject(convertObject(value, o))];
       }
     }
     return [key, Number(value)];
   });
+}
+
+function toObject(obj: unknown[][]) {
+  return Object.fromEntries(obj);
 }
 
 function isObject(obj: unknown): obj is Record<ObjKey, unknown> {

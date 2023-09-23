@@ -133,6 +133,13 @@ Deno.test("Array conversions", async (t) => {
 
     assertEquals(maybeNumber, [123, [456, [789]], 42]);
   });
+
+  await t.step("Convert array with nested object with convertNested", () => {
+    const arr = ["123", { a: "456", b: "789" }, "42"];
+    const maybeNumber = toNumber(arr, { convertNested: true });
+
+    assertEquals(maybeNumber, [123, { a: 456, b: 789 }, 42]);
+  });
 });
 
 Deno.test("Object conversions", async (t) => {
