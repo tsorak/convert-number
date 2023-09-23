@@ -1,10 +1,11 @@
 {
   "tasks": {
-    "test": "deno test conversion_test.ts",
-    "dev": "deno test --watch conversion_test.ts"
+    "test": "deno test test/",
+    "dev": "deno test --watch test/",
+    "cache": "deno cache -r --unstable ./**/*.ts"
   },
   "imports": {
-    "@/": "./src/",
+    "@/": "./",
     "std_assert/": "https://deno.land/std@0.202.0/assert/"
   }
 }

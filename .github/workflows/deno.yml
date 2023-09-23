@@ -3,8 +3,14 @@ name: Deno
 on:
   push:
     branches: ["master"]
+    paths:
+      - "lib/**"
+      - "test/**"
   pull_request:
     branches: ["master"]
+    paths:
+      - "lib/**"
+      - "test/**"
 
 permissions:
   contents: read
@@ -28,8 +34,8 @@ jobs:
       - name: Run linter
         run: deno lint
 
-      - name: Cache deps
-        run: deno cache -r --unstable *.ts
+      - name: Cache dependencies
+        run: deno task cache
 
       - name: Run tests
-        run: deno test -A
+        run: deno task test

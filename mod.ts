@@ -1,1 +1,1 @@
-export { toNumber } from "./conversion.ts";
+export { toNumber } from "@/lib/conversion.ts";

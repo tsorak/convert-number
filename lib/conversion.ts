@@ -15,6 +15,7 @@ type NestedNumberArray<T> = Array<T> | Array<NestedNumberArray<T> | T | number>;
 //     allowNaN?: boolean;
 //     allowEmpty?: boolean;
 //     convertBooleans?: boolean;
+//     convertNested?: boolean;
 //   }
 // ): number | number[] | Record<ObjKey, number> | false;
 /**
@@ -40,10 +41,6 @@ export function toNumber(
   value: boolean,
   o?: { convertBooleans: boolean }
 ): number | false;
-/**
- * Note that if `convertNested` is true, the return type will be as many nested arrays as the input.
- * Hence the return type is **unknown[]** | false.
- */
 export function toNumber(
   value: Array<string | number>,
   o?: {

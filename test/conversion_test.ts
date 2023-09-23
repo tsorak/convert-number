@@ -1,6 +1,6 @@
 import { assertEquals } from "std_assert/mod.ts";
 
-import { toNumber } from "./mod.ts";
+import { toNumber } from "@/mod.ts";
 
 //Strings
 Deno.test("String conversions", async (t) => {
