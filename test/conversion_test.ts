@@ -11,11 +11,18 @@ Deno.test("String conversions", async (t) => {
     assertEquals(maybeNumber, 123);
   });
 
-  await t.step("Convert from invalid string", () => {
+  await t.step("Convert from invalid string returns false", () => {
     const str = "Hello World!";
     const maybeNumber = toNumber(str);
 
     assertEquals(maybeNumber, false);
+  });
+
+  await t.step("Convert from invalid string with allowNaN returns NaN", () => {
+    const str = "Hello World!";
+    const maybeNumber = toNumber(str, { allowNaN: true });
+
+    assertEquals(maybeNumber, NaN);
   });
 });
 
@@ -28,11 +35,18 @@ Deno.test("Number conversions", async (t) => {
     assertEquals(maybeNumber, 123);
   });
 
-  await t.step("Convert from invalid number", () => {
+  await t.step("Convert from invalid number returns false", () => {
     const num = NaN;
     const maybeNumber = toNumber(num);
 
     assertEquals(maybeNumber, false);
+  });
+
+  await t.step("Convert from invalid number with allowNaN returns NaN", () => {
+    const num = NaN;
+    const maybeNumber = toNumber(num, { allowNaN: true });
+
+    assertEquals(maybeNumber, NaN);
   });
 });
 

@@ -3,6 +3,10 @@ interface ConvertOptions {
   allowEmpty?: boolean;
   convertBooleans?: boolean;
   convertNested?: boolean;
+  /**
+   * @description If true, the initial value will be returned in case it's NaN.
+   */
+  //   keepInitialIfNaN?: boolean;
 }
 
 export type ObjKey = string | number | symbol;
@@ -72,61 +76,62 @@ export function toNumber<K extends ObjKey>(
   value: unknown,
   o?: ConvertOptions
 ): number | Array<number | unknown> | Record<K, number | unknown> | false {
+  const shouldAllowNaN = o?.allowNaN === true;
+  const shouldAllowEmpty = o?.allowEmpty === true;
+  const shouldConvertBooleans = o?.convertBooleans === true;
+
   const vtype = getValueType(value);
 
   switch (vtype) {
     case "boolean": {
       const bool = value as boolean;
-      if (o?.convertBooleans) return convertBool(bool);
+      if (shouldConvertBooleans) return convertBool(bool);
       return false;
     }
     case "string": {
       const str = value as string;
       const maybeNumber = Number(str);
-      if (Number.isNaN(maybeNumber)) return false;
+      if (!shouldAllowNaN && Number.isNaN(maybeNumber)) return false;
       const num = maybeNumber;
       return num;
     }
     case "number": {
       const num = value as number;
-      if (Number.isNaN(num)) return false;
+      if (!shouldAllowNaN && Number.isNaN(num)) return false;
       return num;
     }
     case "array": {
       const arr = value as unknown[];
       const isEmpty = arr.length === 0;
-      if (isEmpty && o?.allowEmpty) return [];
-      if (isEmpty) return false;
-
-      const numberArr = convertArray(arr, o);
-
-      const shouldFailOnNaN = o?.allowNaN !== true;
-      if (shouldFailOnNaN) {
-        const hasNaNPresent = isNaNPresent(numberArr);
-        if (hasNaNPresent === true) return false;
+      if (isEmpty) {
+        return shouldAllowEmpty ? [] : false;
       }
 
-      return numberArr;
+      const numberArr = convertArray(arr, o);
+      if (shouldAllowNaN) return numberArr;
+
+      const hasNaNPresent = isNaNPresent(numberArr);
+      return hasNaNPresent ? false : numberArr;
     }
     case "object": {
       const obj = value as Record<K, unknown>;
       const isEmpty = isObjectEmpty(obj);
-      if (isEmpty && o?.allowEmpty) return {} as Record<K, number>;
-      if (isEmpty) return false;
-
-      const converted = convertObject(obj, o);
-
-      const shouldFailOnNaN = o?.allowNaN !== true;
-      if (shouldFailOnNaN) {
-        const hasNaNPresent = isNaNPresent(converted);
-        if (hasNaNPresent === true) return false;
+      if (isEmpty) {
+        return shouldAllowEmpty ? ({} as Record<K, number>) : false;
       }
 
+      const converted = convertObject(obj, o);
+      const convertedObj = () => Object.fromEntries(converted);
+
       // @ts-ignore:
-      return Object.fromEntries(converted);
+      if (shouldAllowNaN) return convertedObj();
+
+      const hasNaNPresent = isNaNPresent(converted);
+      // @ts-ignore:
+      return hasNaNPresent ? false : convertedObj();
     }
     case "notimplemented": {
-      console.warn("Type not implemented for:", value);
+      console.warn("(convert-number) Type not implemented for:", value);
       return false;
     }
     default:
