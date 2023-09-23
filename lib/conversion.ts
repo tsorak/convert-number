@@ -7,6 +7,7 @@ interface ConvertOptions {
    * @description If true, the initial value will be returned in case it's NaN.
    */
   //   keepInitialIfNaN?: boolean;
+  //   omitNaNEntries?: boolean;
 }
 
 export type ObjKey = string | number | symbol;
