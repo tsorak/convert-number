@@ -10,19 +10,31 @@ interface ConvertOptions {
   //   omitNaNEntries?: boolean;
 }
 
+interface ParsedConvertOptions {
+  shouldAllowNaN: boolean;
+  shouldAllowEmpty: boolean;
+  shouldConvertBooleans: boolean;
+  shouldConvertNested: boolean;
+}
+
+function parseOptions(o?: ConvertOptions): ParsedConvertOptions {
+  const shouldAllowNaN = o?.allowNaN === true;
+  const shouldAllowEmpty = o?.allowEmpty === true;
+  const shouldConvertBooleans = o?.convertBooleans === true;
+  const shouldConvertNested = o?.convertNested === true;
+
+  return {
+    shouldAllowNaN,
+    shouldAllowEmpty,
+    shouldConvertBooleans,
+    shouldConvertNested,
+  };
+}
+
 export type ObjKey = string | number | symbol;
 
 type NestedNumberArray<T> = Array<T> | Array<NestedNumberArray<T> | T | number>;
 
-// export function toNumber<K extends ObjKey>(
-//   value: number | string | boolean | unknown[] | Record<K, unknown>,
-//   o?: {
-//     allowNaN?: boolean;
-//     allowEmpty?: boolean;
-//     convertBooleans?: boolean;
-//     convertNested?: boolean;
-//   }
-// ): number | number[] | Record<ObjKey, number> | false;
 /**
  * @description Converts a value to a number, number array, or number object.
  *
@@ -77,9 +89,8 @@ export function toNumber<K extends ObjKey>(
   value: unknown,
   o?: ConvertOptions
 ): number | Array<number | unknown> | Record<K, number | unknown> | false {
-  const shouldAllowNaN = o?.allowNaN === true;
-  const shouldAllowEmpty = o?.allowEmpty === true;
-  const shouldConvertBooleans = o?.convertBooleans === true;
+  const options = parseOptions(o);
+  const { shouldAllowNaN, shouldAllowEmpty, shouldConvertBooleans } = options;
 
   const vtype = getValueType(value);
 
@@ -91,14 +102,19 @@ export function toNumber<K extends ObjKey>(
     }
     case "string": {
       const str = value as string;
-      const maybeNumber = Number(str);
+      const maybeNumber = convertValueForType(str, "string", options);
       if (!shouldAllowNaN && Number.isNaN(maybeNumber)) return false;
       const num = maybeNumber;
       return num;
     }
     case "number": {
-      const num = value as number;
-      if (!shouldAllowNaN && Number.isNaN(num)) return false;
+      const maybeNumber = convertValueForType(
+        value as number,
+        "number",
+        options
+      );
+      if (!shouldAllowNaN && Number.isNaN(maybeNumber)) return false;
+      const num = maybeNumber;
       return num;
     }
     case "array": {
@@ -108,11 +124,11 @@ export function toNumber<K extends ObjKey>(
         return shouldAllowEmpty ? [] : false;
       }
 
-      const numberArr = convertArray(arr, o);
-      if (shouldAllowNaN) return numberArr;
+      const converted = convertArray(arr, options);
 
-      const hasNaNPresent = isNaNPresent(numberArr);
-      return hasNaNPresent ? false : numberArr;
+      // converted is NaN if shouldAllowNaN is false and a NaN value is encountered.
+      if (typeof converted === "number") return false;
+      return converted;
     }
     case "object": {
       const obj = value as Record<K, unknown>;
@@ -121,15 +137,11 @@ export function toNumber<K extends ObjKey>(
         return shouldAllowEmpty ? ({} as Record<K, number>) : false;
       }
 
-      const converted = convertObject(obj, o);
-      const convertedObj = () => toObject(converted);
+      const converted = convertObject(obj, options);
 
-      // @ts-ignore:
-      if (shouldAllowNaN) return convertedObj();
-
-      const hasNaNPresent = isNaNPresent(converted);
-      // @ts-ignore:
-      return hasNaNPresent ? false : convertedObj();
+      // converted is NaN if shouldAllowNaN is false and a NaN value is encountered.
+      if (typeof converted === "number") return false;
+      return toObject(converted);
     }
     case "notimplemented": {
       console.warn("(convert-number) Type not implemented for:", value);
@@ -150,45 +162,87 @@ function getValueType(value: unknown) {
   return "notimplemented";
 }
 
-//@ts-ignore: if o.convertNested is true the return type will be as many nested arrays as the input
-function convertArray(
-  arr: unknown[],
-  o?: ConvertOptions
-  // ): number[] | NestedNumberArray<number[]> {
-) {
-  const shouldConvertNested = o?.convertNested === true;
-  return arr.map((item) => {
-    if (typeof item === "boolean") {
-      if (o?.convertBooleans) return convertBool(item);
+function convertValueForType(
+  value: Record<ObjKey, unknown> | Array<unknown> | boolean | string | number,
+  type: string,
+  o: ParsedConvertOptions
+): number | unknown[] | unknown[][] {
+  switch (type) {
+    case "array":
+      if (!o.shouldConvertNested) return NaN;
+      return convertArray(value as unknown[], o);
+    case "object":
+      if (!o.shouldConvertNested) return NaN;
+      return convertObject(value as Record<ObjKey, unknown>, o);
+    case "boolean":
+      if (o.shouldConvertBooleans) return convertBool(value as boolean);
       return NaN;
-    }
-    if (shouldConvertNested) {
-      if (Array.isArray(item)) return convertArray(item, o);
-      if (isObject(item)) return toObject(convertObject(item, o));
-    }
-    return Number(item);
-  });
+    case "string":
+      if (value === "") return NaN;
+      return Number(value);
+    case "number":
+      return Number(value);
+    case "notimplemented":
+      console.log("(convert-number) Type not implemented for:", value);
+      return NaN;
+    default:
+      return NaN;
+  }
 }
 
-//@ts-ignore: if o.convertNested is true the return type will be as many nested arrays as the input
-function convertObject<K extends ObjKey, V>(
-  obj: Record<K, V>,
-  o?: ConvertOptions
-) {
-  const shouldConvertNested = o?.convertNested === true;
-  return Object.entries(obj).map(([key, value]) => {
-    if (typeof value === "boolean") {
-      if (o?.convertBooleans) return [key, convertBool(value)];
-      return [key, NaN];
-    }
-    if (shouldConvertNested) {
-      if (Array.isArray(value)) return [key, convertArray(value, o)];
-      if (isObject(value)) {
-        return [key, toObject(convertObject(value, o))];
-      }
-    }
-    return [key, Number(value)];
+function convertArray<T>(arr: T[], o: ParsedConvertOptions) {
+  let encounteredNaN = false;
+  const triggerNaNEncountered = () => (encounteredNaN = true);
+
+  const convertedArr = [...arr.entries()].map((kvPair) => {
+    const [, value] = convertKvPair(kvPair, triggerNaNEncountered, o);
+    return value;
   });
+
+  if (encounteredNaN === false) return convertedArr;
+  return o.shouldAllowNaN ? convertedArr : NaN;
+}
+
+function convertObject(obj: Record<ObjKey, unknown>, o: ParsedConvertOptions) {
+  let encounteredNaN = false;
+  const triggerNaNEncountered = () => (encounteredNaN = true);
+
+  const convertedEntries = Object.entries(obj).map((kvPair) => {
+    return convertKvPair(kvPair, triggerNaNEncountered, o);
+  });
+
+  if (encounteredNaN === false) return convertedEntries;
+  return o.shouldAllowNaN ? convertedEntries : NaN;
+}
+
+function convertKvPair(
+  kvPair: [ObjKey, unknown],
+  encounteredNaN: () => void,
+  o: ParsedConvertOptions
+): [ObjKey, unknown] {
+  const [key, value] = kvPair;
+
+  const vtype = getValueType(value);
+  //@ts-ignore: value can be unknown.
+  const convertedValue = convertValueForType(value, vtype, o);
+  const convertedType = getValueType(convertedValue);
+
+  // Check every primitive value for NaN.
+  // More efficeient as we don't need to loop over every item
+  // in more complex types later on.
+  //
+  // TODO: Can be improved by breaking out of the loop as soon as NaN is encountered.
+  if (
+    o.shouldAllowNaN === false &&
+    convertedType === "number" &&
+    Number.isNaN(convertedValue)
+  ) {
+    encounteredNaN();
+  }
+
+  return vtype === "object" && o.shouldConvertNested
+    ? [key, toObject(convertedValue as [ObjKey, unknown][])]
+    : [key, convertedValue as number | unknown[]];
 }
 
 function toObject(obj: unknown[][]) {
@@ -201,10 +255,6 @@ function isObject(obj: unknown): obj is Record<ObjKey, unknown> {
 
 function isObjectEmpty<K extends ObjKey, V>(obj: Record<K, V>): boolean {
   return Object.keys(obj).length === 0;
-}
-
-function isNaNPresent(arr: unknown[]) {
-  return arr.flat(Infinity).some((item) => Number.isNaN(item) === true);
 }
 
 function convertBool(b: boolean): number {

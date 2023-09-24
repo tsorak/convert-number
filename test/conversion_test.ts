@@ -11,6 +11,13 @@ Deno.test("String conversions", async (t) => {
     assertEquals(maybeNumber, 123);
   });
 
+  await t.step("Convert from empty string returns false", () => {
+    const str = "";
+    const maybeNumber = toNumber(str);
+
+    assertEquals(maybeNumber, false);
+  });
+
   await t.step("Convert from invalid string returns false", () => {
     const str = "Hello World!";
     const maybeNumber = toNumber(str);
@@ -164,9 +171,9 @@ Deno.test("Object conversions", async (t) => {
     "Convert from object containing NaN values with allowNaN",
     () => {
       const obj = { a: "123", b: "foo", c: "789", 1: 1 };
-      const maybeNumber = toNumber(obj);
+      const maybeNumber = toNumber(obj, { allowNaN: true });
 
-      assertEquals(maybeNumber, false);
+      assertEquals(maybeNumber, { a: 123, b: NaN, c: 789, 1: 1 });
     }
   );
 
