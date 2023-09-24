@@ -6,7 +6,7 @@ interface ConvertOptions {
   /**
    * @description If true, the initial value will be returned in case it's NaN.
    */
-  //   keepInitialIfNaN?: boolean;
+  keepInitialIfNaN?: boolean;
   //   omitNaNEntries?: boolean;
 }
 
@@ -15,6 +15,7 @@ interface ParsedConvertOptions {
   shouldAllowEmpty: boolean;
   shouldConvertBooleans: boolean;
   shouldConvertNested: boolean;
+  shouldKeepInitialIfNaN: boolean;
 }
 
 function parseOptions(o?: ConvertOptions): ParsedConvertOptions {
@@ -22,12 +23,14 @@ function parseOptions(o?: ConvertOptions): ParsedConvertOptions {
   const shouldAllowEmpty = o?.allowEmpty === true;
   const shouldConvertBooleans = o?.convertBooleans === true;
   const shouldConvertNested = o?.convertNested === true;
+  const shouldKeepInitialIfNaN = o?.keepInitialIfNaN === true;
 
   return {
     shouldAllowNaN,
     shouldAllowEmpty,
     shouldConvertBooleans,
     shouldConvertNested,
+    shouldKeepInitialIfNaN,
   };
 }
 
@@ -43,6 +46,7 @@ type NestedNumberArray<T> = Array<T> | Array<NestedNumberArray<T> | T | number>;
  * - `allowEmpty`: If true, empty arrays and objects are returned as is. Defaults to **false**.
  * - `convertBooleans`: If true, boolean values are converted to 1 aswell as 0. Defaults to **false**.
  * - `convertNested`: If true, nested arrays and objects are converted. Defaults to **false**.
+ * - `keepInitialIfNaN`: If true, the initial value will be returned in case it's NaN. Defaults to **false**.
  */
 export function toNumber(
   value: string,
@@ -64,7 +68,7 @@ export function toNumber(
     allowNaN?: boolean;
     allowEmpty?: boolean;
     convertBooleans?: boolean;
-    // convertNested?: boolean;
+    keepInitialIfNaN?: boolean;
   }
 ): number[] | false;
 export function toNumber<T>(
@@ -74,21 +78,23 @@ export function toNumber<T>(
     allowEmpty?: boolean;
     convertBooleans?: boolean;
     convertNested?: true;
+    keepInitialIfNaN?: boolean;
   }
 ): NestedNumberArray<number[] | T> | false;
-export function toNumber<K extends ObjKey>(
-  value: Record<K, unknown>,
+export function toNumber<K extends ObjKey, V>(
+  value: Record<K, V>,
   o?: {
     allowNaN?: boolean;
     allowEmpty?: boolean;
     convertBooleans?: boolean;
     convertNested?: boolean;
+    keepInitialIfNaN?: boolean;
   }
-): Record<K, number | unknown> | false;
-export function toNumber<K extends ObjKey>(
+): Record<K, number | unknown | V> | false;
+export function toNumber<K extends ObjKey, V>(
   value: unknown,
   o?: ConvertOptions
-): number | Array<number | unknown> | Record<K, number | unknown> | false {
+): number | Array<number | V> | Record<K, number | V> | false {
   const options = parseOptions(o);
   const { shouldAllowNaN, shouldAllowEmpty, shouldConvertBooleans } = options;
 
@@ -118,7 +124,7 @@ export function toNumber<K extends ObjKey>(
       return num;
     }
     case "array": {
-      const arr = value as unknown[];
+      const arr = value as V[];
       const isEmpty = arr.length === 0;
       if (isEmpty) {
         return shouldAllowEmpty ? [] : false;
@@ -131,7 +137,7 @@ export function toNumber<K extends ObjKey>(
       return converted;
     }
     case "object": {
-      const obj = value as Record<K, unknown>;
+      const obj = value as Record<K, V>;
       const isEmpty = isObjectEmpty(obj);
       if (isEmpty) {
         return shouldAllowEmpty ? ({} as Record<K, number>) : false;
@@ -162,24 +168,77 @@ function getValueType(value: unknown) {
   return "notimplemented";
 }
 
+function convertValueForType<V>(
+  value: Record<ObjKey, V>,
+  type: "object",
+  o: ParsedConvertOptions
+): [ObjKey, number][] | number;
+function convertValueForType<V>(
+  value: Record<ObjKey, V>,
+  type: "object",
+  o: ParsedConvertOptions & { keepInitialIfNaN: true }
+): [ObjKey, V | number][] | number;
+function convertValueForType<T>(
+  value: Array<T>,
+  type: "array",
+  o: ParsedConvertOptions
+): Array<number> | number;
+function convertValueForType<T>(
+  value: Array<T>,
+  type: "array",
+  o: ParsedConvertOptions & { keepInitialIfNaN: true }
+): Array<number | T> | number;
+//bools
 function convertValueForType(
-  value: Record<ObjKey, unknown> | Array<unknown> | boolean | string | number,
+  value: boolean,
+  type: "boolean",
+  o: ParsedConvertOptions
+): number;
+function convertValueForType(
+  value: boolean,
+  type: "boolean",
+  o: ParsedConvertOptions & { keepInitialIfNaN: true }
+): number | boolean;
+//strings
+function convertValueForType(
+  value: string,
+  type: "string",
+  o: ParsedConvertOptions
+): number;
+function convertValueForType(
+  value: string,
+  type: "string",
+  o: ParsedConvertOptions & { keepInitialIfNaN: true }
+): string | number;
+//numbers
+function convertValueForType(
+  value: number,
+  type: "number",
+  o: ParsedConvertOptions
+): number;
+function convertValueForType<T, V>(
+  value: Record<ObjKey, V> | Array<T> | boolean | string | number,
   type: string,
   o: ParsedConvertOptions
-): number | unknown[] | unknown[][] {
+): number | string | boolean | Array<number | T> | [ObjKey, number | V][] {
   switch (type) {
     case "array":
       if (!o.shouldConvertNested) return NaN;
-      return convertArray(value as unknown[], o);
+      return convertArray(value as T[], o);
     case "object":
       if (!o.shouldConvertNested) return NaN;
-      return convertObject(value as Record<ObjKey, unknown>, o);
+      return convertObject(value as Record<ObjKey, V>, o);
     case "boolean":
       if (o.shouldConvertBooleans) return convertBool(value as boolean);
+      if (o.shouldKeepInitialIfNaN) return value as boolean;
       return NaN;
-    case "string":
+    case "string": {
+      const maybeNumber = Number(value);
+      if (isNaN(maybeNumber) && o.shouldKeepInitialIfNaN)
+        return value as string;
       if (value === "") return NaN;
       return Number(value);
+    }
     case "number":
       return Number(value);
     case "notimplemented":
@@ -190,7 +249,10 @@ function convertValueForType(
   }
 }
 
-function convertArray<T>(arr: T[], o: ParsedConvertOptions) {
+function convertArray<T>(
+  arr: T[],
+  o: ParsedConvertOptions
+): number | Array<T | number> {
   let encounteredNaN = false;
   const triggerNaNEncountered = () => (encounteredNaN = true);
 
@@ -199,11 +261,14 @@ function convertArray<T>(arr: T[], o: ParsedConvertOptions) {
     return value;
   });
 
-  if (encounteredNaN === false) return convertedArr;
-  return o.shouldAllowNaN ? convertedArr : NaN;
+  if (encounteredNaN === false) return convertedArr as Array<T | number>;
+  return o.shouldAllowNaN ? (convertedArr as Array<T | number>) : NaN;
 }
 
-function convertObject(obj: Record<ObjKey, unknown>, o: ParsedConvertOptions) {
+function convertObject<K extends ObjKey, V>(
+  obj: Record<K, V>,
+  o: ParsedConvertOptions
+): number | [K, V | number][] {
   let encounteredNaN = false;
   const triggerNaNEncountered = () => (encounteredNaN = true);
 
@@ -211,15 +276,15 @@ function convertObject(obj: Record<ObjKey, unknown>, o: ParsedConvertOptions) {
     return convertKvPair(kvPair, triggerNaNEncountered, o);
   });
 
-  if (encounteredNaN === false) return convertedEntries;
-  return o.shouldAllowNaN ? convertedEntries : NaN;
+  if (encounteredNaN === false) return convertedEntries as [K, V | number][];
+  return o.shouldAllowNaN ? (convertedEntries as [K, V | number][]) : NaN;
 }
 
-function convertKvPair(
-  kvPair: [ObjKey, unknown],
+function convertKvPair<K extends ObjKey, V>(
+  kvPair: [K, V],
   encounteredNaN: () => void,
   o: ParsedConvertOptions
-): [ObjKey, unknown] {
+): [K, V | number | ReturnType<typeof toObject>] {
   const [key, value] = kvPair;
 
   const vtype = getValueType(value);
@@ -241,8 +306,8 @@ function convertKvPair(
   }
 
   return vtype === "object" && o.shouldConvertNested
-    ? [key, toObject(convertedValue as [ObjKey, unknown][])]
-    : [key, convertedValue as number | unknown[]];
+    ? [key, toObject(convertedValue as [K, V | number][])]
+    : [key, convertedValue];
 }
 
 function toObject(obj: unknown[][]) {

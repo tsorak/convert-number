@@ -210,4 +210,22 @@ Deno.test("Object conversions", async (t) => {
 
     assertEquals(maybeNumber, { a: 123, b: { c: 456, d: NaN }, e: 789 });
   });
+
+  await t.step("Convert object with NaN values with keepInitialIfNaN", () => {
+    const obj = {
+      name: "Deno",
+      versions: ["1.37.0", "1.0", "unstable"],
+      age: "2",
+    };
+    const maybeNumber = toNumber(obj, {
+      keepInitialIfNaN: true,
+      convertNested: true,
+    });
+
+    assertEquals(maybeNumber, {
+      name: "Deno",
+      versions: ["1.37.0", 1.0, "unstable"],
+      age: 2,
+    });
+  });
 });
