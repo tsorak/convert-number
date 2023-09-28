@@ -8,6 +8,7 @@ interface ConvertOptions {
    */
   keepInitialIfNaN?: boolean;
   //   omitNaNEntries?: boolean;
+  nanMode?: "omit" | "keepInitial" | "keepNaN" | "disallow";
 }
 
 interface ParsedConvertOptions {
@@ -16,14 +17,16 @@ interface ParsedConvertOptions {
   shouldConvertBooleans: boolean;
   shouldConvertNested: boolean;
   shouldKeepInitialIfNaN: boolean;
+  shouldOmitNaNEntries: boolean;
 }
 
 function parseOptions(o?: ConvertOptions): ParsedConvertOptions {
-  const shouldAllowNaN = o?.allowNaN === true;
+  const shouldAllowNaN = o?.nanMode === "keepNaN";
   const shouldAllowEmpty = o?.allowEmpty === true;
   const shouldConvertBooleans = o?.convertBooleans === true;
   const shouldConvertNested = o?.convertNested === true;
-  const shouldKeepInitialIfNaN = o?.keepInitialIfNaN === true;
+  const shouldKeepInitialIfNaN = o?.nanMode === "keepInitial";
+  const shouldOmitNaNEntries = o?.nanMode === "omit";
 
   return {
     shouldAllowNaN,
@@ -31,6 +34,7 @@ function parseOptions(o?: ConvertOptions): ParsedConvertOptions {
     shouldConvertBooleans,
     shouldConvertNested,
     shouldKeepInitialIfNaN,
+    shouldOmitNaNEntries,
   };
 }
 
